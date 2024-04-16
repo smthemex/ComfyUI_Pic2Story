@@ -37,7 +37,7 @@ class DownloadModel:
             os.environ['HF_ENDPOINT'] = 'https://huggingface.co'
         return os.environ['HF_ENDPOINT']
 
-    def download_model_a(self, repo_id, model_local_dir, max_workers, local_dir_use_symlinks, use_hf_mirror):
+    def download_model(self, repo_id, model_local_dir, max_workers, local_dir_use_symlinks, use_hf_mirror):
         self.hf_mirror(use_hf_mirror)
         from huggingface_hub import snapshot_download
 
