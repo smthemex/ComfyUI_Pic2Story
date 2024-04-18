@@ -82,21 +82,15 @@ class Pic2Story:
         image = Image.fromarray(image_np, mode='RGB')
         return image
 
-    def get_model(self, get_model_online):
-        if get_model_online:
-            os.environ['TRANSFORMERS_OFFLINE'] = "0"
-        else:
-            os.environ['TRANSFORMERS_OFFLINE'] = "1"
-        return os.environ['TRANSFORMERS_OFFLINE']
-
     def pic_to_story(self, image, prompt, model_path, inference_mode, get_model_online):
         if image == None:
             raise ValueError("need a picture")
         if not model_path:
             raise ValueError("need a model_path")
         else:
-            self.get_model(get_model_online)
-
+            if not get_model_online:
+                os.environ['TRANSFORMERS_OFFLINE'] = "1"
+                
             processor = BlipProcessor.from_pretrained(model_path)
 
             pil_image = self.tensor_to_image(image)
