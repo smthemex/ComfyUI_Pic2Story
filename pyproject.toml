@@ -1,0 +1,14 @@
+[project]
+name = "comfyui_pic2story"
+description = "ComfyUI simple node based on BLIP method, with the function of Image to Txt."
+version = "1.0.0"
+license = "LICENSE"
+
+[project.urls]
+Repository = "https://github.com/smthemex/ComfyUI_Pic2Story"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = ""
+DisplayName = "ComfyUI_Pic2Story"
+Icon = ""
