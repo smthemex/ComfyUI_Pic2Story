@@ -2,7 +2,7 @@
 name = "comfyui_pic2story"
 description = "you can using pic2story in comfyUI"
 version = "1.0.0"
-license = "LICENSE"
+license = { file = "LICENSE" }
 
 [project.urls]
 Repository = "https://github.com/smthemex/ComfyUI_Pic2Story"
