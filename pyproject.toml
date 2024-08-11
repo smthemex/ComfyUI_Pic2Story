@@ -1,7 +1,7 @@
 [project]
 name = "comfyui_pic2story"
 description = "you can using pic2story in comfyUI"
-version = "1.0.0"
+version = "1.1.0"
 license = { file = "LICENSE" }
 
 [project.urls]
@@ -9,6 +9,6 @@ Repository = "https://github.com/smthemex/ComfyUI_Pic2Story"
 #  Used by Comfy Registry https://comfyregistry.org
 
 [tool.comfy]
-PublisherId = "smthemx"
+PublisherId = "smthemex"
 DisplayName = "ComfyUI_Pic2Story"
 Icon = ""
