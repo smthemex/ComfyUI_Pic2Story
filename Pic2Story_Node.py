@@ -23,23 +23,41 @@ class Pic2Story_Loader:
             }
         }
     
-    RETURN_TYPES = ("MODEL","MODEL","STRING",)
-    RETURN_NAMES = ("model","processor","info")
+    RETURN_TYPES = ("PICMODEL",)
+    RETURN_NAMES = ("model",)
     FUNCTION = "load_main"
     CATEGORY = "Pic2Story"
     
     def load_main(self, repo_id, inference_mode):
         if not repo_id:
             raise ValueError("need a repo_id or local_model_path ")
-        if inference_mode == "gpu_float16":
-            model = BlipForConditionalGeneration.from_pretrained(repo_id,
-                                                                 torch_dtype=torch.float16).to("cuda")
-        elif inference_mode == "gpu":
-            model = BlipForConditionalGeneration.from_pretrained(repo_id).to("cuda")
+        if "Pic2Story" in repo_id:
+            mode="story"
         else:
-            model = BlipForConditionalGeneration.from_pretrained(repo_id)
-        processor = BlipProcessor.from_pretrained(repo_id)
-        return (model,processor,inference_mode,)
+            mode = "paligemma"
+        if mode=="story":
+            if inference_mode == "gpu_float16":
+                model = BlipForConditionalGeneration.from_pretrained(repo_id,
+                                                                     torch_dtype=torch.float16).to("cuda")
+            elif inference_mode == "gpu":
+                model = BlipForConditionalGeneration.from_pretrained(repo_id).to("cuda")
+            else:
+                model = BlipForConditionalGeneration.from_pretrained(repo_id)
+            processor = BlipProcessor.from_pretrained(repo_id)
+        else:
+            from transformers import PaliGemmaForConditionalGeneration, PaliGemmaProcessor
+            
+            #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            device = "cpu" if "cpu" in inference_mode else "cuda"
+            model = PaliGemmaForConditionalGeneration.from_pretrained(
+                repo_id,
+                torch_dtype=torch.bfloat16,
+                local_files_only=True
+            ).to(device)
+            processor = PaliGemmaProcessor.from_pretrained(repo_id, local_files_only=True)
+        model={"model":model,"processor":processor,"inference_mode":inference_mode,"mode":mode}
+            
+        return (model,)
         
 
 class Pic2Story_Sampler:
@@ -51,9 +69,7 @@ class Pic2Story_Sampler:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "model": ("MODEL",),
-                "processor": ("MODEL",),
-                "info": ("STRING", {"forceInput": True, "default": ""}),
+                "model": ("PICMODEL",),
                 "prompt": ("STRING", {"default": "a photography of"}),
             }
         }
@@ -64,47 +80,64 @@ class Pic2Story_Sampler:
     CATEGORY = "Pic2Story"
 
    
-
-    def pic_to_story(self, image,model,processor,info, prompt):
-
+    def pic_to_story(self, image,model, prompt):
+        processor=model.get("processor")
+        mode=model.get("mode")
+        inference_mode=model.get("inference_mode")
+        model=model.get("model")
         pil_image = tensor_to_image(image)
-
-        if info == "gpu_float16":
-            if not prompt:
-                # unconditional image captioning
-                inputs = processor(pil_image, return_tensors="pt").to("cuda", torch.float16)
-                print("processor image without prompt")
+        if mode=="story":
+            if inference_mode == "gpu_float16":
+                if not prompt:
+                    # unconditional image captioning
+                    inputs = processor(pil_image, return_tensors="pt").to("cuda", torch.float16)
+                    print("processor image without prompt")
+                else:
+                    # conditional image captioning
+                    inputs = processor(pil_image, prompt, return_tensors="pt").to("cuda", torch.float16)
+                out = model.generate(**inputs)
+                story_out = processor.decode(out[0], skip_special_tokens=True)
+                print(type(story_out))
+                
+                return (story_out,)
+            elif inference_mode == "gpu":
+                if not prompt:
+                    # unconditional image captioning
+                    inputs = processor(pil_image, return_tensors="pt").to("cuda")
+                    print("processor image without prompt")
+                else:
+                    # conditional image captioning
+                    inputs = processor(pil_image, prompt, return_tensors="pt").to("cuda")
+                out = model.generate(**inputs)
+                story_out = processor.decode(out[0], skip_special_tokens=True)
+                return (story_out,)
             else:
-                # conditional image captioning
-                inputs = processor(pil_image, prompt, return_tensors="pt").to("cuda", torch.float16)
-            out = model.generate(**inputs)
-            story_out = processor.decode(out[0], skip_special_tokens=True)
-            print(type(story_out))
-
-            return (story_out,)
-        elif info == "gpu":
-            if not prompt:
-                # unconditional image captioning
-                inputs = processor(pil_image, return_tensors="pt").to("cuda")
-                print("processor image without prompt")
-            else:
-                # conditional image captioning
-                inputs = processor(pil_image, prompt, return_tensors="pt").to("cuda")
-            out = model.generate(**inputs)
-            story_out = processor.decode(out[0], skip_special_tokens=True)
-            return (story_out,)
+                if not prompt:
+                    # unconditional image captioning
+                    inputs = processor(pil_image, return_tensors="pt")
+                    print("processor image without prompt")
+                else:
+                    # conditional image captioning
+                    inputs = processor(pil_image, prompt, return_tensors="pt")
+                out = model.generate(**inputs)
+                
+                story_out = processor.decode(out[0], skip_special_tokens=True)
         else:
+            device ="cpu" if "cpu" in inference_mode else "cuda"
+            
             if not prompt:
-                # unconditional image captioning
-                inputs = processor(pil_image, return_tensors="pt")
-                print("processor image without prompt")
-            else:
-                # conditional image captioning
-                inputs = processor(pil_image, prompt, return_tensors="pt")
-            out = model.generate(**inputs)
-
-            story_out = processor.decode(out[0], skip_special_tokens=True)
-            return (story_out,)
+                prompt= "describe en\n"
+            inputs = processor(text=prompt, images=pil_image,
+                               padding="longest", do_convert_rgb=True, return_tensors="pt").to(device)
+            inputs = inputs.to(dtype=model.dtype)
+            
+            with torch.no_grad():
+                output = model.generate(**inputs, max_new_tokens=128)
+            
+            story_out = processor.decode(output[0], skip_special_tokens=True)
+            
+            story_out=story_out.splitlines()[-1]
+        return (story_out,)
 
 
 NODE_CLASS_MAPPINGS = {
